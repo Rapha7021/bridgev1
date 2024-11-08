@@ -7,7 +7,7 @@ class TransactionsScreen extends StatelessWidget {
 
   TransactionsScreen({Key? key, required this.transactions}) : super(key: key);
 
-  @override
+  @overridee
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
