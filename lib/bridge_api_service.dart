@@ -4,12 +4,23 @@ import 'dart:convert';
 import 'transaction.dart';
 import 'transactions_screen.dart';
 import 'webview_screen.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class BridgeApiService {
   final String baseUrl = 'https://api.bridgeapi.io/v2';
   final String clientId = '96a80b4117df44058bef05a04c082a59';
   final String clientSecret = 'slWpx68xqQBZhS5lqLVQrxTnMxRT5uZzUSC9fIPYDPusIgYrbwCN7wE1q06HM77Q';
   String? accessToken;
+
+  Future<void> saveAccessToken(String token) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('access_token', token);
+  }
+
+  Future<String?> loadAccessToken() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString('access_token');
+  }
 
   Future<void> createUserAndAuthenticate(BuildContext context) async {
     final userCreationResponse = await http.post(
@@ -39,6 +50,7 @@ class BridgeApiService {
 
       if (authResponse.statusCode == 200) {
         accessToken = jsonDecode(authResponse.body)['access_token'];
+        await saveAccessToken(accessToken!); // Sauvegarde du token
         print('Authentification réussie. Token d\'accès: $accessToken');
         await firstSynchronization(context);
       } else {
@@ -78,17 +90,15 @@ class BridgeApiService {
         context,
         MaterialPageRoute(builder: (context) => WebViewScreen(url: redirectUrl)),
       ).then((_) async {
-        await fetchTransactions(context);
+        await fetchTransactions();
       });
     } else {
       print('Erreur lors de la synchronisation initiale : ${response.body}');
     }
   }
 
-  Future<List<Transaction>> fetchTransactions(BuildContext context) async {
-    if (accessToken == null) {
-      throw Exception('Aucun token d\'accès disponible.');
-    }
+  Future<List<Transaction>> fetchTransactions() async {
+    if (accessToken == null) throw Exception('Aucun token d\'accès disponible.');
 
     final response = await http.get(
       Uri.parse('$baseUrl/transactions/updated'),
@@ -102,19 +112,11 @@ class BridgeApiService {
     );
 
     if (response.statusCode == 200) {
-      final Map<String, dynamic> jsonResponse = jsonDecode(response.body);
-
-      // Accès à la clé 'resources' pour obtenir les transactions
+      final jsonResponse = jsonDecode(response.body);
       if (jsonResponse['resources'] is List) {
-        List<dynamic> transactionsJson = jsonResponse['resources'];
-        List<Transaction> transactions = transactionsJson.map((transaction) => Transaction.fromJson(transaction)).toList();
-
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (context) => TransactionsScreen(transactions: transactions)),
-        );
-
-        return transactions;
+        return (jsonResponse['resources'] as List)
+            .map((transaction) => Transaction.fromJson(transaction))
+            .toList();
       } else {
         throw Exception('Aucune transaction trouvée ou mauvais format de données.');
       }
@@ -122,5 +124,6 @@ class BridgeApiService {
       throw Exception('Erreur lors de la récupération des transactions : ${response.body}');
     }
   }
+
 
 }
